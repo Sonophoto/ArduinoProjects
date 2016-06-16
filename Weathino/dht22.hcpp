@@ -1,0 +1,233 @@
+#include <stdint.h>
+
+/*!
+ * \brief An interrupt-driven library for the DHT22 sensor
+ *
+ * This class provides an interrupt-driven interface to the DHT22 sensor.
+ * The user must attach an ISR to the falling edge of the DHT22 data pin
+ * and invoke #onFallingEdge() in the ISR.
+ *
+ * Reading can be started with #startRead(), which returns immediately,
+ * or #blockingRead(), which waits for the reading to complete.
+ *
+ * If #state() returns #Done, the data has been read and can be accessed
+ * with #getTemp() and #getHumidity(). Be aware of the measuring units!!
+ * If #state() returns #Invalid, #lastResult() can give some information on
+ * the cause.
+ *
+ * Usage example:
+ * \code
+ * DHT22 dht(2);
+ *
+ * void dhtISR() {
+ *    dht.onFallingEdge();
+ * }
+ *
+ * void setup() {
+ *     Serial.begin(9600);
+ *     // On Arduino Uno, interrupt 0 is attached to pin 2
+ *     attachInterrupt(0, &dhtISR, FALLING);
+ *     // let the sensor warm up for 2 seconds
+ *     delay(2000);
+ * }
+ *
+ * void loop() {
+ *     if (dht.blockingRead() == DHT22::Ok) {
+ *         Serial.print("Temperature: ");
+ *         Serial.print(dht.getTemp()/10.0);
+ *         Serial.println("C");
+ *         Serial.print("Humidity: ");
+ *         Serial.print(dht.getHumidity()/10.0);
+ *         Serial.println("%");
+ *     }
+ *     // Minimum interval between reads.
+ *     delay(2000);
+ * }
+ * \endcode
+ */
+class DHT22
+{
+public:
+    /*!
+     * \brief Possible result values
+     */
+    enum Result {
+        None, //!< Data has never been read
+        Ok, //!< Yay!!
+        ChecksumMismatch, //!< The data reading was currupted
+        WakeUpError, //!< There was a protocol timing error during the sensor wake-up
+        DataError //!< There was a protocol timing error during data transmission
+    };
+    /*!
+     * \brief The status of the library state machine
+     */
+    enum Status {
+        WakingUp, //!< The sensor is waking up
+        Reading, //!< The sensor is transmitting data
+        Done, //!< Data was successfully read
+        Invalid //!< Data reading failed or was never attempted
+    };
+
+    /*!
+     * \brief Construct a DHT22 library instance
+     * \param pin The data pin of the sensor
+     */
+    DHT22(int pin);
+    /*!
+     * \brief Signals the library that the data pin has gone low
+     */
+    void onFallingEdge();
+    /*!
+     * \brief Wakes up the sensor and starts waiting for data
+     * \return Whether the reading was started
+     */
+    bool startRead();
+    /*!
+     * \brief Starts reading, if necessary, and waits for result
+     * \return The reading result
+     */
+    Result blockingRead();
+    /*!
+     * \brief The last temperature reading
+     * \return The temperature in tents of Celsius degree
+     */
+    int16_t getTemp();
+    /*!
+     * \brief The last humidity reading
+     * \return The relative humidity in per mil
+     */
+    uint16_t getHumidity();
+    /*!
+     * \brief The sensor status
+     */
+    Status state();
+    /*!
+     * \brief The result of the last reading
+     */
+    Result lastResult();
+private:
+    int _pin;
+    volatile Status  _state;
+    volatile Result _result;
+    volatile uint8_t _data[5];
+    volatile uint8_t _bit;
+    volatile uint8_t _byte;
+    volatile unsigned long _lastEdge;
+    volatile uint16_t _humidity;
+    volatile int16_t _temp;
+};
+#include "DHT22.h"
+#include <Arduino.h>
+
+namespace {
+namespace Trigger {
+    const uint16_t low = 2000;
+    const uint16_t high = 40;
+}
+namespace WakeUp {
+    const uint16_t min = 125;
+    const uint16_t max = 190;
+}
+namespace Bit {
+    const uint16_t min = 60;
+    const uint16_t threshold = 100;
+    const uint16_t max = 145;
+}
+}
+
+DHT22::DHT22(int pin):
+    _pin(pin),
+    _state(Invalid),
+    _result(None),
+    _humidity(0),
+    _temp(0)
+{
+}
+
+bool DHT22::startRead() {
+    if (_state == Invalid || _state == Done) {
+        for (uint8_t i=0; i< sizeof(_data); i++) {
+            _data[i] = 0;
+        }
+        _bit = 7;
+        _byte = 0;
+
+        // Trigger the sensor
+        pinMode(_pin, OUTPUT);
+        digitalWrite(_pin, LOW);
+        delayMicroseconds(Trigger::low);
+        digitalWrite(_pin, HIGH);
+        delayMicroseconds(Trigger::high);
+        pinMode(_pin, INPUT);
+        _lastEdge = micros();
+        _state = WakingUp;
+        return true;
+    }
+    return false;
+}
+
+DHT22::Result DHT22::blockingRead() {
+    startRead();
+    while((_state != Done && _state != Invalid)){}
+    return lastResult();
+}
+
+void DHT22::onFallingEdge() {
+    unsigned long now = micros();
+    uint16_t elapsed = now - _lastEdge;
+    _lastEdge = now;
+    switch(_state) {
+    case WakingUp:
+        if(elapsed > WakeUp::min && elapsed < WakeUp::max) {
+            _state = Reading;
+        } else {
+            _result = WakeUpError;
+            _state = Invalid;
+        }
+        break;
+    case Reading:
+        if(elapsed > Bit::min && elapsed < Bit::max) {
+            if(elapsed > Bit::threshold)  _data[_byte] |= (1 << _bit);
+            if (_bit == 0) {
+                _bit = 7;
+                if(++_byte == sizeof(_data)) {
+                    uint8_t sum = _data[0] + _data[1] + _data[2] + _data[3];
+                    if (_data[4] != sum) {
+                        _result = ChecksumMismatch;
+                        _state = Invalid;
+                    } else {
+                        _humidity = word(_data[0], _data[1]);
+                        _temp = word(_data[2] & 0x7F, _data[3]);
+                        if (_data[2] & 0x80) _temp = -_temp;
+                        _result = Ok;
+                        _state = Done;
+                    }
+                    break;
+                }
+            }
+            else _bit--;
+        } else {
+            _result = DataError;
+            _state = Invalid;
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+DHT22::Status DHT22::state() {
+    return _state;
+}
+
+DHT22::Result DHT22::lastResult() {
+    return _result;
+}
+
+int16_t DHT22::getTemp() {
+    return _temp;
+}
+
+uint16_t DHT22::getHumidity() {
+    return _humidity;
+}
