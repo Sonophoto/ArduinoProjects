@@ -48,7 +48,7 @@ int readTPA81(byte twi_address) {
    Wire.endTransmission();
    // Request bytes from the device
    Wire.requestFrom((twi_address >> 1), 10);
-   delay(50);
+   delay(40); // (1000ms / TPA81 Frame Rate) = 40ms
    Serial.print("Number of bytes returned: ");
    Serial.println(Wire.available());
    if (Wire.available()) {
