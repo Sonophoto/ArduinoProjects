@@ -12,7 +12,7 @@ Giant pile of functions for running motors connected to an H-Bridge circuit.
 Scans for TPA81 thermal cameras on I2C bus and returns 10 data bytes from each device found.
 ### STUB ONLY:
 #### Weathino:
-This is just a stub for a simple Arduino "weather station" fine place to start yours ;-) Note: I don't claim the name "Weathino" its fair game AFAIK.
+This is just a stub for a simple Arduino "weather station" fine place to start yours ;-) Note: I don't claim the name "Weathino" its fair game AFAIK. If you are interested in weather codes you might like this python script that looks up weather forecasts by locating your IP address: https://github.com/Sonophoto/PythonNotes/tree/master/weatherLookup
 
 Some projects may require you to install other (3rd party) libraries before they will compile and run.
 
