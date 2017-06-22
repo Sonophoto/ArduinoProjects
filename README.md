@@ -1,5 +1,5 @@
 ### ArduinoProjects
-A collection of original, GPL licensed, Arduino projects that may be of interest for robotics and sensors projects
+A collection of original, GPL and BSD(2c) Licensed, Arduino projects that may be of interest for robotics and sensors projects
 
 I only really use Arduino Mega 2560s because they have interrupts and hardware serial. Because of this you may need a Mega to run some of these projects. It may be possible to adapt them to Unos and others but that is left as an exercise as they say. Also note that some sensors may use an abridged interface and do not give complete access to all of the sensors features. I will try to point out any libraries that implement all chip/sensor features in these cases.
 
