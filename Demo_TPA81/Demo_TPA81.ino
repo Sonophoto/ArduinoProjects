@@ -31,6 +31,7 @@
  */
 
 #include <Wire.h>
+#include <string.h>
 
 // Utility constants
 // relaible frame rate almost perfect 20 FPS
@@ -38,7 +39,7 @@
 // Fastest hardware frame rate, possibility of duplicate frames.
 // #define TPA81_FRAME_DELAY              39 // 25.20 FPS on Arduino Mega2560
 #define TPA81_AMBIENT_AND_PIXEL_COUNT   9
-#define TPA81_PIXEL_COUNT               8          
+#define TPA81_PIXEL_COUNT               8
 
 // TPA81 constants and data byte offsets
 #define TPA81_ADDRESS        0x68
@@ -54,8 +55,11 @@ uint8_t ambient_temperature = 0x00;
 // Ambient, Pixel_1, Pixel_2, Pixel_3, Pixel_4, Pixel_5, Pixel_6, Pixel_7, Pixel_8
 uint8_t  pixel_data[9] = {0,0,0,0,0,0,0,0,0};
 
-// A C++ String object for building output lines
-String pixel_output = "";
+// C strings for building output lines
+#define OUTPUT_HEADER_SIZE 256
+char output_header[OUTPUT_HEADER_SIZE] = "";
+#define PIXEL_OUTPUT_SIZE 32
+char pixel_output[PIXEL_OUTPUT_SIZE] = "";
 
 void setup() {
    // Start-up our communication objects
@@ -66,12 +70,13 @@ void setup() {
    // Build our header and send it out the serial port
    firmware_version = tpa81_readByte(TPA81_ADDRESS, TPA81_REG_VERSION);
    ambient_temperature = tpa81_readByte(TPA81_ADDRESS, TPA81_REG_AMBIENT);
-   String output_header = "\nTPA81 8x1 Thermal Camera Demo\nCopyright © 2017 Brig Young";
-   output_header += "\nTPA81 Firmware Version:     ";
-   output_header += firmware_version;
-   output_header += "\nAmbient Temperature:       ";
-   output_header += ambient_temperature;
-   output_header += "\n\n";
+   sprintf(output_header, %s%s%f%s%f%s,
+      "\nTPA81 8x1 Thermal Camera Demo\nCopyright © 2017,2018 Brig Young",
+      "\nTPA81 Firmware Version:  ",
+      firmware_version,
+      "\nAmbient Temperature:     ",
+      ambient_temperature,
+      "\n\n");
    Serial.println(output_header);
 }
 
@@ -82,12 +87,11 @@ void loop() {
      exit(1);
   }
   // Populate our output string with our pixel data
-  for (int pindex = 0; pindex < TPA81_AMBIENT_AND_PIXEL_COUNT; pindex++) {
-     pixel_output += pixel_data[pindex];
-     (pindex < TPA81_PIXEL_COUNT) ? pixel_output += " " : pixel_output += "\n";
-  }
+  sprintf(pixel_output, "%d %d %d %d %d %d %d %d %d",
+          pixel_data[0], pixel_data[1], pixel_data[2],
+          pixel_data[3], pixel_data[4], pixel_data[5],
+          pixel_data[6], pixel_data[7], pixel_data[8]);
   Serial.println(pixel_output);
-  pixel_output.remove(0); // stoopid name for erase or clear...
   delay(TPA81_FRAME_DELAY);
 }
 
