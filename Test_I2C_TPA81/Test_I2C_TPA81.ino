@@ -30,9 +30,17 @@
 
 #include <Wire.h>
 
+// We have translated the manufacturers documented addresses to conventional
+// I2C address numbers. The manufacturers documentation is incorrect because
+// their addresses are left shifted to their position on the wire side of the
+// I2C protocol. It is correct that these new addresses increment by 1 not 2.
+// 
+// The Wire library and others expect a right aligned 7bit address as follows:
+byte address_list[] = {0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F};
+
+byte data_buffer[] = {0,0,0,0,0,0,0,0,0,0};
+
 byte tpa81_address;
-byte address_list[] = {0xD0, 0xD2, 0xD4, 0xD6, 0xD8, 0xDA, 0xDC, 0xDE};
-byte  data_buffer[] = {0,0,0,0,0,0,0,0,0,0};
 
 void setup() {
 
@@ -43,12 +51,12 @@ delay(1000);
 
 int readTPA81(byte twi_address) {
    // Start a new master session on the bus
-   Wire.beginTransmission((twi_address >> 1));
+   Wire.beginTransmission((twi_address));
    Wire.write(0x00);
    Wire.endTransmission();
    // Request bytes from the device
-   Wire.requestFrom((twi_address >> 1), 10);
-   delay(50);
+   Wire.requestFrom((twi_address), 10);
+   delay(40); // (1000ms / TPA81 Frame Rate) = 40ms
    Serial.print("Number of bytes returned: ");
    Serial.println(Wire.available());
    if (Wire.available()) {
@@ -68,7 +76,7 @@ void loop() {
       Serial.print("Taking a reading from the TPA81 at address: ");
       Serial.println(tpa81_address);
       // Read the device at our current address
-      readTPA81(tpa81_address);
+      (void) readTPA81(tpa81_address);
       // Print out any data payload for this address
       for (int pindex = 0; pindex < 10; pindex++) {
          Serial.print(data_buffer[pindex]);
